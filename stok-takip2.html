@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Stok Takip</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a3d;
+    --accent: #00e5a0;
+    --accent2: #7c3aed;
+    --danger: #ff4757;
+    --text: #f0f0f8;
+    --muted: #6b6b8a;
+    --radius: 14px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .sync-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--muted);
+    background: var(--surface2); padding: 5px 10px;
+    border-radius: 20px; border: 1px solid var(--border);
+  }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+  .sync-dot.offline { background: var(--danger); animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .main { padding: 20px; max-width: 500px; margin: 0 auto; }
+
+  .scanner-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin-bottom: 20px;
+  }
+  .scanner-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px;
+    letter-spacing: 1px; text-transform: uppercase; color: var(--accent);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .scanner-body { padding: 20px; }
+
+  #video-container {
+    width: 100%; aspect-ratio: 4/3;
+    background: #000; border-radius: 10px;
+    overflow: hidden; position: relative; display: none;
+  }
+  #video-container.active { display: block; }
+  #scanner-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .scan-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .scan-frame {
+    width: 220px; height: 220px;
+    border: 2px solid var(--accent); border-radius: 12px;
+    position: relative; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+  }
+  .scan-line {
+    position: absolute; left: 4px; right: 4px; height: 2px;
+    background: var(--accent); animation: scan 2s linear infinite;
+    box-shadow: 0 0 8px var(--accent);
+  }
+  @keyframes scan { 0%{top:10px} 100%{top:calc(100% - 12px)} }
+  .corner { position: absolute; width: 20px; height: 20px; }
+  .corner-tl { top:-2px;left:-2px; border-top:3px solid var(--accent); border-left:3px solid var(--accent); border-radius:4px 0 0 0; }
+  .corner-tr { top:-2px;right:-2px; border-top:3px solid var(--accent); border-right:3px solid var(--accent); border-radius:0 4px 0 0; }
+  .corner-bl { bottom:-2px;left:-2px; border-bottom:3px solid var(--accent); border-left:3px solid var(--accent); border-radius:0 0 0 4px; }
+  .corner-br { bottom:-2px;right:-2px; border-bottom:3px solid var(--accent); border-right:3px solid var(--accent); border-radius:0 0 4px 0; }
+
+  .scan-hint {
+    position: absolute; bottom: 12px; left: 0; right: 0;
+    text-align: center; font-size: 12px; color: rgba(255,255,255,0.7);
+    font-family: 'Syne', sans-serif;
+  }
+
+  .scan-btn {
+    width: 100%; padding: 14px;
+    background: var(--accent); color: #000;
+    border: none; border-radius: 10px;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 14px;
+  }
+  .scan-btn:active { transform: scale(0.97); }
+  .scan-btn.stop { background: var(--danger); color: #fff; }
+
+  .or-divider {
+    text-align: center; color: var(--muted); font-size: 12px; margin: 12px 0; position: relative;
+  }
+  .or-divider::before,.or-divider::after {
+    content:''; position:absolute; top:50%; width:40%; height:1px; background:var(--border);
+  }
+  .or-divider::before{left:0} .or-divider::after{right:0}
+
+  .input-row { display: flex; gap: 8px; margin-top: 8px; }
+  .inp {
+    flex:1; background:var(--surface2); border:1px solid var(--border);
+    border-radius:10px; padding:12px 14px; color:var(--text);
+    font-family:'Space Mono',monospace; font-size:14px; outline:none; transition:border-color 0.2s;
+  }
+  .inp:focus { border-color: var(--accent); }
+  .inp::placeholder { color: var(--muted); }
+  .search-btn {
+    padding:12px 16px; background:var(--surface2); border:1px solid var(--border);
+    border-radius:10px; color:var(--accent); cursor:pointer; font-size:18px; transition:all 0.2s;
+  }
+  .search-btn:active { transform:scale(0.95); background:var(--border); }
+
+  .result-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); margin-bottom:20px; overflow:hidden;
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  .result-header {
+    padding:14px 20px; border-bottom:1px solid var(--border);
+    font-family:'Syne',sans-serif; font-weight:700; font-size:13px;
+    letter-spacing:1px; text-transform:uppercase;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .result-header.found { color: var(--accent); }
+  .result-header.new { color: var(--accent2); }
+  .barcode-label { font-size:11px; color:var(--muted); font-family:'Space Mono',monospace; }
+  .result-body { padding: 20px; }
+  .product-info { margin-bottom: 16px; }
+  .product-name { font-family:'Syne',sans-serif; font-weight:800; font-size:22px; margin-bottom:8px; }
+  .product-price { font-size:28px; font-weight:700; color:var(--accent); }
+  .product-price span { font-size:16px; color:var(--muted); }
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; display:block; }
+  .form-input {
+    width:100%; background:var(--surface2); border:1px solid var(--border);
+    border-radius:10px; padding:13px 16px; color:var(--text);
+    font-family:'Space Mono',monospace; font-size:15px; outline:none; transition:border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--accent2); }
+  .btn-row { display:flex; gap:10px; }
+  .btn {
+    flex:1; padding:13px; border:none; border-radius:10px;
+    font-family:'Syne',sans-serif; font-weight:700; font-size:14px;
+    cursor:pointer; transition:all 0.2s;
+  }
+  .btn:active { transform:scale(0.96); }
+  .btn-primary { background:var(--accent2); color:#fff; }
+  .btn-secondary { background:var(--surface2); color:var(--muted); border:1px solid var(--border); }
+  .btn-danger { background:var(--danger); color:#fff; }
+
+  .list-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .list-header {
+    padding:16px 20px; border-bottom:1px solid var(--border);
+    font-family:'Syne',sans-serif; font-weight:700; font-size:14px;
+    letter-spacing:1px; text-transform:uppercase; color:var(--muted);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .list-count { background:var(--surface2); color:var(--accent); font-size:12px; padding:3px 10px; border-radius:20px; border:1px solid var(--border); }
+  .product-item {
+    padding:16px 20px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    transition:background 0.15s; cursor:pointer;
+  }
+  .product-item:last-child { border-bottom:none; }
+  .product-item:active { background:var(--surface2); }
+  .item-left { flex:1; min-width:0; }
+  .item-name { font-family:'Syne',sans-serif; font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item-code { font-size:11px; color:var(--muted); margin-top:3px; }
+  .item-price { font-size:17px; font-weight:700; color:var(--accent); margin-left:12px; white-space:nowrap; }
+
+  .empty-state { padding:40px 20px; text-align:center; color:var(--muted); }
+  .empty-icon { font-size:40px; margin-bottom:12px; }
+  .empty-text { font-size:14px; line-height:1.6; }
+
+  .toast {
+    position:fixed; bottom:30px; left:50%;
+    transform:translateX(-50%) translateY(100px);
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text); padding:12px 20px; border-radius:30px;
+    font-size:13px; font-family:'Syne',sans-serif; font-weight:600;
+    z-index:999; transition:transform 0.3s ease; white-space:nowrap;
+    box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast.success { border-color:var(--accent); color:var(--accent); }
+  .toast.error { border-color:var(--danger); color:var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">STOK<span>TAKİP</span></div>
+  <div class="sync-badge">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncLabel">Bağlanıyor</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="scanner-card">
+    <div class="scanner-header">📷 Barkod / QR Tara</div>
+    <div class="scanner-body">
+      <div id="video-container">
+        <video id="scanner-video" playsinline muted autoplay></video>
+        <div class="scan-overlay">
+          <div class="scan-frame">
+            <div class="scan-line"></div>
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-tr"></div>
+            <div class="corner corner-bl"></div>
+            <div class="corner corner-br"></div>
+          </div>
+        </div>
+        <div class="scan-hint">Barkodu çerçeve içine getirin</div>
+      </div>
+      <button class="scan-btn" id="scanBtn" onclick="toggleScanner()">📷 Kamerayı Aç</button>
+      <div class="or-divider">ya da manuel gir</div>
+      <div class="input-row">
+        <input class="inp" id="manualCode" placeholder="Barkod / QR kodu gir..." type="text">
+        <button class="search-btn" onclick="lookupManual()">🔍</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="resultArea"></div>
+
+  <div class="list-card">
+    <div class="list-header">
+      Ürün Listesi
+      <span class="list-count" id="listCount">0 ürün</span>
+    </div>
+    <div id="productList">
+      <div class="empty-state">
+        <div class="empty-icon">📦</div>
+        <div class="empty-text">Henüz ürün yok.<br>Barkod okutarak başlayın.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ZXing barkod kütüphanesi - mobil için çok daha güçlü -->
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script>
+const FIREBASE_URL = 'https://stok-takip-demo-default-rtdb.firebaseio.com';
+const LS_KEY = 'stok_urunler_v2';
+
+let products = {};
+let scanning = false;
+let currentCode = null;
+let codeReader = null;
+let stream = null;
+
+// ── INIT ──
+window.onload = async () => {
+  loadLocal();
+  renderList();
+  await syncFromServer();
+  setInterval(syncFromServer, 5000);
+  document.getElementById('manualCode').addEventListener('keydown', e => {
+    if (e.key === 'Enter') lookupManual();
+  });
+};
+
+// ── LOCAL STORAGE ──
+function loadLocal() {
+  try { const d = localStorage.getItem(LS_KEY); if (d) products = JSON.parse(d); } catch(e) {}
+}
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(products)); } catch(e) {}
+}
+
+// ── FIREBASE SYNC ──
+async function syncFromServer() {
+  try {
+    const r = await fetch(FIREBASE_URL + '/products.json', { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    if (data && typeof data === 'object') {
+      let changed = false;
+      for (const [k, v] of Object.entries(data)) {
+        if (!products[k] || v.updatedAt > (products[k].updatedAt || 0)) {
+          products[k] = v; changed = true;
+        }
+      }
+      if (changed) { saveLocal(); renderList(); }
+    }
+    setOnline(true);
+  } catch(e) { setOnline(false); }
+}
+
+async function pushToServer(code, product) {
+  try {
+    const r = await fetch(FIREBASE_URL + '/products/' + encodeURIComponent(code) + '.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
+      signal: AbortSignal.timeout(5000)
+    });
+    setOnline(r.ok);
+    return r.ok;
+  } catch(e) { setOnline(false); return false; }
+}
+
+async function deleteFromServer(code) {
+  try {
+    await fetch(FIREBASE_URL + '/products/' + encodeURIComponent(code) + '.json', {
+      method: 'DELETE', signal: AbortSignal.timeout(5000)
+    });
+  } catch(e) {}
+}
+
+function setOnline(v) {
+  document.getElementById('syncDot').className = 'sync-dot' + (v ? '' : ' offline');
+  document.getElementById('syncLabel').textContent = v ? 'Senkron' : 'Çevrimdışı';
+}
+
+// ── SCANNER (ZXing) ──
+async function toggleScanner() {
+  if (scanning) { stopScanner(); return; }
+
+  const vc = document.getElementById('video-container');
+  const btn = document.getElementById('scanBtn');
+  const video = document.getElementById('scanner-video');
+
+  try {
+    // Kamera izni al
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    video.srcObject = stream;
+    await video.play();
+
+    vc.classList.add('active');
+    btn.classList.add('stop');
+    btn.textContent = '⏹ Kamerayı Kapat';
+    scanning = true;
+
+    // ZXing okuyucu başlat
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    codeReader.decodeFromStream(stream, video, (result, err) => {
+      if (result) {
+        const code = result.getText();
+        if (code) {
+          onCodeDetected(code);
+          stopScanner();
+        }
+      }
+      // err genellikle "not found" — normal, her frame'de gelir
+    });
+
+  } catch(e) {
+    showToast('Kamera hatası: ' + (e.message || e), 'error');
+    stopScanner();
+  }
+}
+
+function stopScanner() {
+  scanning = false;
+  const vc = document.getElementById('video-container');
+  const btn = document.getElementById('scanBtn');
+  vc.classList.remove('active');
+  btn.classList.remove('stop');
+  btn.textContent = '📷 Kamerayı Aç';
+
+  if (codeReader) {
+    try { codeReader.reset(); } catch(e) {}
+    codeReader = null;
+  }
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  document.getElementById('scanner-video').srcObject = null;
+}
+
+function lookupManual() {
+  const val = document.getElementById('manualCode').value.trim();
+  if (!val) { showToast('Lütfen bir kod girin', 'error'); return; }
+  onCodeDetected(val);
+  document.getElementById('manualCode').value = '';
+}
+
+// ── CODE DETECTED ──
+function onCodeDetected(code) {
+  currentCode = code;
+  showToast('Kod okundu: ' + code, 'success');
+  const product = products[code];
+  if (product) showFoundProduct(code, product);
+  else showAddProduct(code);
+}
+
+function showFoundProduct(code, product) {
+  document.getElementById('resultArea').innerHTML = `
+    <div class="result-card">
+      <div class="result-header found">
+        ✅ Ürün Bulundu
+        <span class="barcode-label">${esc(code)}</span>
+      </div>
+      <div class="result-body">
+        <div class="product-info">
+          <div class="product-name">${esc(product.name)}</div>
+          <div class="product-price">${formatPrice(product.price)} <span>TL</span></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="showEditProduct('${esc(code)}')">✏️ Düzenle</button>
+          <button class="btn btn-danger" onclick="deleteProduct('${esc(code)}')">🗑️ Sil</button>
+          <button class="btn btn-secondary" onclick="clearResult()">✕</button>
+        </div>
+      </div>
+    </div>`;
+  scrollToResult();
+}
+
+function showAddProduct(code) {
+  document.getElementById('resultArea').innerHTML = `
+    <div class="result-card">
+      <div class="result-header new">
+        ➕ Yeni Ürün Ekle
+        <span class="barcode-label">${esc(code)}</span>
+      </div>
+      <div class="result-body">
+        <div class="form-group">
+          <label class="form-label">Ürün Adı</label>
+          <input class="form-input" id="newName" placeholder="Örn: Süt 1L" type="text">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fiyat (TL)</label>
+          <input class="form-input" id="newPrice" placeholder="0.00" type="number" step="0.01" min="0">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveProduct('${esc(code)}')">💾 Kaydet</button>
+          <button class="btn btn-secondary" onclick="clearResult()">İptal</button>
+        </div>
+      </div>
+    </div>`;
+  scrollToResult();
+  setTimeout(() => document.getElementById('newName')?.focus(), 150);
+}
+
+function showEditProduct(code) {
+  const p = products[code];
+  if (!p) return;
+  document.getElementById('resultArea').innerHTML = `
+    <div class="result-card">
+      <div class="result-header new">
+        ✏️ Ürünü Düzenle
+        <span class="barcode-label">${esc(code)}</span>
+      </div>
+      <div class="result-body">
+        <div class="form-group">
+          <label class="form-label">Ürün Adı</label>
+          <input class="form-input" id="editName" value="${esc(p.name)}" type="text">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fiyat (TL)</label>
+          <input class="form-input" id="editPrice" value="${p.price}" type="number" step="0.01" min="0">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="updateProduct('${esc(code)}')">💾 Güncelle</button>
+          <button class="btn btn-secondary" onclick="clearResult()">İptal</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function saveProduct(code) {
+  const name = document.getElementById('newName')?.value.trim();
+  const price = parseFloat(document.getElementById('newPrice')?.value) || 0;
+  if (!name) { showToast('Ürün adı zorunlu', 'error'); return; }
+  const product = { name, price, updatedAt: Date.now() };
+  products[code] = product;
+  saveLocal(); renderList();
+  showFoundProduct(code, product);
+  showToast('Ürün kaydedildi ✓', 'success');
+  const ok = await pushToServer(code, product);
+  if (!ok) showToast('Çevrimdışı - yerel kaydedildi', 'error');
+}
+
+async function updateProduct(code) {
+  const name = document.getElementById('editName')?.value.trim();
+  const price = parseFloat(document.getElementById('editPrice')?.value) || 0;
+  if (!name) { showToast('Ürün adı zorunlu', 'error'); return; }
+  const product = { name, price, updatedAt: Date.now() };
+  products[code] = product;
+  saveLocal(); renderList();
+  showFoundProduct(code, product);
+  showToast('Ürün güncellendi ✓', 'success');
+  await pushToServer(code, product);
+}
+
+async function deleteProduct(code) {
+  if (!confirm('Bu ürünü silmek istediğinizden emin misiniz?')) return;
+  delete products[code];
+  saveLocal(); renderList(); clearResult();
+  showToast('Ürün silindi', 'error');
+  await deleteFromServer(code);
+}
+
+function clearResult() {
+  document.getElementById('resultArea').innerHTML = '';
+  currentCode = null;
+}
+
+function renderList() {
+  const list = document.getElementById('productList');
+  const count = document.getElementById('listCount');
+  const keys = Object.keys(products);
+  count.textContent = keys.length + ' ürün';
+  if (keys.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Henüz ürün yok.<br>Barkod okutarak başlayın.</div></div>`;
+    return;
+  }
+  list.innerHTML = keys.map(k => {
+    const p = products[k];
+    return `<div class="product-item" onclick="onCodeDetected('${esc(k)}')">
+      <div class="item-left">
+        <div class="item-name">${esc(p.name)}</div>
+        <div class="item-code">${esc(k)}</div>
+      </div>
+      <div class="item-price">${formatPrice(p.price)} TL</div>
+    </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function formatPrice(p) {
+  return parseFloat(p||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function scrollToResult() {
+  setTimeout(() => document.getElementById('resultArea').scrollIntoView({behavior:'smooth',block:'start'}), 100);
+}
+let toastTimer;
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (type ? ' '+type : '');
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
